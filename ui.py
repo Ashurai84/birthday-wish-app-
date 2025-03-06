@@ -1,156 +1,133 @@
 import tkinter as tk
-from tkinter import messagebox, ttk
-from tkcalendar import DateEntry
-import json
-import main  # Importing main.py to handle functionality
-from plyer import notification
+from tkinter import messagebox
+import birthday_manager
+import email_sender
+import pygame  # For background music
+import random  # For confetti effect
 
-# Load saved settings
-def load_settings():
-    try:
-        with open("settings.json", "r") as f:
-            return json.load(f)
-    except FileNotFoundError:
-        return {"theme": "Light"}
+# 🎶 Initialize pygame mixer for background music
+pygame.mixer.init()
+pygame.mixer.music.load("assets/birthday_song.mp3")  # Ensure this file exists
+pygame.mixer.music.play(-1)  # Loop indefinitely
 
-# Save settings
-def save_settings():
-    with open("settings.json", "w") as f:
-        json.dump(settings, f)
-
-# Toggle Theme
-def toggle_theme():
-    selected_theme = theme_var.get()
-    settings["theme"] = selected_theme
-    save_settings()
-    apply_theme()
-
-def apply_theme():
-    theme = settings.get("theme", "Light")
-    bg_color = "#2C2F33" if theme == "Dark" else "#F0F0F0"
-    fg_color = "white" if theme == "Dark" else "black"
-    btn_bg = "#7289DA" if theme == "Dark" else "#3B82F6"
-    
-    root.configure(bg=bg_color)
-    
-    for widget in root.winfo_children():
-        if isinstance(widget, (tk.Label, tk.Entry, DateEntry, ttk.Combobox, tk.Listbox)):
-            widget.configure(bg=bg_color, fg=fg_color)
-        elif isinstance(widget, tk.Button):
-            widget.configure(bg=btn_bg, fg="white", font=("Arial", 10, "bold"), bd=0, relief=tk.RAISED)
-
-# Add Birthday
-def add_birthday():
-    name = name_entry.get()
-    email = email_entry.get()
-    date = date_entry.get()
-    
-    if name and email and date:
-        with open("birthday_data.csv", "a") as file:
-            file.write(f"{name},{email},{date}\n")
-        messagebox.showinfo("Success", "Birthday added successfully!")
-        name_entry.delete(0, tk.END)
-        email_entry.delete(0, tk.END)
-        date_entry.set_date("")
-        load_birthdays()
-    else:
-        messagebox.showwarning("Input Error", "Please fill all fields!")
-
-# Load Birthdays
-def load_birthdays():
-    listbox.delete(0, tk.END)
-    try:
-        with open("birthday_data.csv", "r") as file:
-            for line in file:
-                name, email, date = line.strip().split(",")
-                listbox.insert(tk.END, f"{name} - {date}")
-    except FileNotFoundError:
-        open("birthday_data.csv", "w").close()
-
-# Search Function
-def search_birthday():
-    query = search_entry.get().lower()
-    listbox.delete(0, tk.END)
-    try:
-        with open("birthday_data.csv", "r") as file:
-            for line in file:
-                name, email, date = line.strip().split(",")
-                if query in name.lower():
-                    listbox.insert(tk.END, f"{name} - {date}")
-    except FileNotFoundError:
-        pass
-
-# Send Birthday Wishes
-def send_birthday_wishes():
-    main.send_wishes()
-    messagebox.showinfo("Success", "Birthday wishes sent!")
-
-# Desktop Notification
-def check_today_birthdays():
-    from datetime import datetime
-    today = datetime.today().strftime('%Y-%m-%d')
-    try:
-        with open("birthday_data.csv", "r") as file:
-            for line in file:
-                name, email, date = line.strip().split(",")
-                if date == today:
-                    notification.notify(
-                        title="🎂 Birthday Reminder!",
-                        message=f"Today is {name}'s birthday! Don't forget to wish!",
-                        timeout=10
-                    )
-    except FileNotFoundError:
-        pass
-
-# UI Setup
+# 🎈 Tkinter UI Setup
 root = tk.Tk()
 root.title("🎂 Birthday Reminder")
-root.geometry("450x550")
+root.geometry("500x600")
+root.configure(bg="#ffecb3")  # Light yellow background
 
-settings = load_settings()
-theme_var = tk.StringVar(value=settings.get("theme", "Light"))
+# 🎊 Confetti Animation
+confetti_canvas = tk.Canvas(root, width=500, height=100, bg="#ffecb3", highlightthickness=0)
+confetti_canvas.pack()
 
-# Apply Theme
-apply_theme()
+confetti_particles = []
+for _ in range(20):  # Generate confetti
+    x = random.randint(0, 500)
+    y = random.randint(0, 100)
+    size = random.randint(5, 15)
+    color = random.choice(["red", "blue", "green", "purple", "orange"])
+    particle = confetti_canvas.create_oval(x, y, x+size, y+size, fill=color)
+    confetti_particles.append((particle, random.randint(1, 4)))  # Speed
 
-# UI Elements with Better Styling
-tk.Label(root, text="Name:", font=("Arial", 11, "bold")).pack(pady=(10, 2))
-name_entry = tk.Entry(root, font=("Arial", 11))
-name_entry.pack()
+def animate_confetti():
+    for particle, speed in confetti_particles:
+        confetti_canvas.move(particle, 0, speed)
+        x1, y1, x2, y2 = confetti_canvas.coords(particle)
+        if y2 > 100:
+            confetti_canvas.move(particle, 0, -100)
+    root.after(50, animate_confetti)
 
-tk.Label(root, text="Email:", font=("Arial", 11, "bold")).pack(pady=(10, 2))
-email_entry = tk.Entry(root, font=("Arial", 11))
-email_entry.pack()
+animate_confetti()
 
-tk.Label(root, text="Date (YYYY-MM-DD):", font=("Arial", 11, "bold")).pack(pady=(10, 2))
-date_entry = DateEntry(root, date_pattern='yyyy-mm-dd', font=("Arial", 11))
-date_entry.pack()
+# 📅 List Today's & Upcoming Birthdays
+def update_birthday_lists():
+    """Update UI with today's and upcoming birthdays."""
+    today_birthdays = birthday_manager.get_todays_birthdays()
+    upcoming_birthdays = birthday_manager.get_upcoming_birthdays()
 
-tk.Button(root, text="➕ Add Birthday", command=add_birthday, height=1, width=15).pack(pady=5)
+    # Clear previous content
+    today_listbox.delete(0, tk.END)
+    upcoming_listbox.delete(0, tk.END)
 
-# Search
-search_entry = tk.Entry(root, font=("Arial", 11))
-search_entry.pack(pady=5)
-tk.Button(root, text="🔍 Search", command=search_birthday, height=1, width=15).pack()
+    # Add today's birthdays
+    if today_birthdays:
+        for b in today_birthdays:
+            today_listbox.insert(tk.END, f"🎉 {b['Name']} ({b['Email']})")
+    else:
+        today_listbox.insert(tk.END, "No Birthdays Today 🎂")
 
-# Birthday List
-listbox = tk.Listbox(root, height=8, font=("Arial", 11))
-listbox.pack(pady=5, fill=tk.BOTH, expand=True)
-scrollbar = tk.Scrollbar(root, orient=tk.VERTICAL, command=listbox.yview)
-scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-listbox.config(yscrollcommand=scrollbar.set)
+    # Add upcoming birthdays
+    if upcoming_birthdays:
+        for name, dob, days in upcoming_birthdays:
+            upcoming_listbox.insert(tk.END, f"📅 {name} - {dob} (in {days} days)")
+    else:
+        upcoming_listbox.insert(tk.END, "No Upcoming Birthdays 🎈")
 
-# Send Wishes Button
-tk.Button(root, text="🎉 Send Wishes", command=send_birthday_wishes, height=1, width=15).pack(pady=5)
+# 📩 Send Birthday Wishes
+def send_wishes():
+    """Send birthday emails to today's birthdays."""
+    today_birthdays = birthday_manager.get_todays_birthdays()
+    if not today_birthdays:
+        messagebox.showinfo("No Birthdays", "🎂 No birthdays today to send wishes.")
+        return
+    
+    success_count = 0
+    failed_count = 0
+    failed_list = []
 
-# Theme Selection
-tk.Label(root, text="Theme:", font=("Arial", 11, "bold")).pack()
-theme_menu = ttk.Combobox(root, textvariable=theme_var, values=["Light", "Dark"], state="readonly", font=("Arial", 11))
-theme_menu.pack()
-tk.Button(root, text="🌙 Apply Theme", command=toggle_theme, height=1, width=15).pack(pady=5)
+    for person in today_birthdays:
+        name, email = person["Name"], person["Email"]
+        success = email_sender.send_email(email, name)
+        if success:
+            success_count += 1
+        else:
+            failed_count += 1
+            failed_list.append(name)
 
-# Load Birthdays on Start
-load_birthdays()
-check_today_birthdays()
+    # Show result
+    messagebox.showinfo("Email Status", f"✅ Sent: {success_count}\n❌ Failed: {failed_count}")
+    if failed_count > 0:
+        messagebox.showerror("Failed Emails", f"❌ Could not send to: {', '.join(failed_list)}")
 
+# 📅 UI Elements
+tk.Label(root, text="🎂 Today's Birthdays:", font=("Arial", 14, "bold"), bg="#ffecb3", fg="black").pack()
+today_listbox = tk.Listbox(root, height=5, font=("Arial", 12), bg="black", fg="white")
+today_listbox.pack(pady=5)
+
+tk.Label(root, text="📅 Upcoming Birthdays:", font=("Arial", 14, "bold"), bg="#ffecb3", fg="black").pack()
+upcoming_listbox = tk.Listbox(root, height=5, font=("Arial", 12), bg="black", fg="white")
+upcoming_listbox.pack(pady=5)
+
+# 📩 Custom Send Wishes Button with Improved Visibility
+def on_enter(e):
+    send_button.config(bg="#ff5733", fg="white")  # Change color on hover
+
+def on_leave(e):
+    send_button.config(bg="red", fg="white")  # Revert to original
+
+send_button = tk.Button(
+    root, 
+    text="📩 Send Wishes", 
+    font=("Arial", 14, "bold"), 
+    command=send_wishes, 
+    bg="red", 
+    fg="white", 
+    activebackground="#ff5733",  
+    activeforeground="white",
+    relief="raised", 
+    borderwidth=4, 
+    padx=10, 
+    pady=5
+)
+
+send_button.pack(pady=15)
+
+# 🖱️ Add Hover Effects
+send_button.bind("<Enter>", on_enter)
+send_button.bind("<Leave>", on_leave)
+
+# 🎈 Load Birthdays on Start
+update_birthday_lists()
+
+# 🎂 Run Tkinter Window
 root.mainloop()

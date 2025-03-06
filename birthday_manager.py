@@ -1,22 +1,33 @@
 import csv
+import datetime
 
-BIRTHDAY_FILE = "birthday_data.csv"
+BIRTHDAY_FILE = "birthdays.csv"
 
-def add_birthday(name, email, date):
-    """Adds a birthday entry to the CSV file."""
-    with open(BIRTHDAY_FILE, "a", newline="") as file:
-        writer = csv.writer(file)
-        writer.writerow([name, email, date])
-
-def load_birthdays():
-    """Loads all birthdays from CSV file."""
+def get_birthdays():
+    """Fetch all birthdays from CSV."""
+    birthdays = []
     try:
         with open(BIRTHDAY_FILE, "r") as file:
-            return [line.strip().split(",") for line in file.readlines()]
+            reader = csv.DictReader(file)
+            for row in reader:
+                birthdays.append(row)
     except FileNotFoundError:
+        print("⚠️ No birthdays found. Creating an empty file.")
         open(BIRTHDAY_FILE, "w").close()
-        return []
+    return birthdays
 
-def search_birthday(query):
-    """Searches for a birthday by name."""
-    return [b for b in load_birthdays() if query.lower() in b[0].lower()]
+def get_todays_birthdays():
+    """Get a list of people whose birthday is today."""
+    today = datetime.date.today().strftime("%Y-%m-%d")
+    return [b for b in get_birthdays() if b["DOB"] == today]
+
+def get_upcoming_birthdays():
+    """Get birthdays happening within the next 7 days."""
+    today = datetime.date.today()
+    upcoming = []
+    for b in get_birthdays():
+        dob = datetime.datetime.strptime(b["DOB"], "%Y-%m-%d").date()
+        days_left = (dob - today).days
+        if 0 < days_left <= 7:
+            upcoming.append((b["Name"], b["DOB"], days_left))
+    return sorted(upcoming, key=lambda x: x[2])  # Sort by days left
